@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>hex</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        #rain-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        #content {
+            opacity: 0;
+            animation: fadeIn 1.5s ease-out forwards;
+            position: relative;
+            z-index: 2;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 40px;
+            /* Removed static text-shadow */
+            /* Apply gradient */
+            background-image: linear-gradient(90deg, #0f0, #fff, #0f0);
+            background-size: 200% auto;
+            color: transparent;
+            background-clip: text;
+            -webkit-background-clip: text;
+            animation: gradientMove 5s linear infinite;
+        }
+
+        @keyframes gradientMove {
+            0% { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #0f0;
+            padding: 20px;
+            background-color: rgba(0, 255, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            transform-origin: center;
+            cursor: pointer;
+            /* Apply mouse follow transform using CSS variables */
+            transform: translate(var(--mouse-x, 0px), var(--mouse-y, 0px));
+        }
+
+        .section:hover {
+            /* Combine hover scale with mouse follow transform */
+            transform: translate(var(--mouse-x, 0px), var(--mouse-y, 0px)) scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+            background-color: rgba(0, 255, 0, 0.08);
+            border-color: #0f0;
+        }
+
+        .section:hover h2 {
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        .section:hover .text {
+            text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+        }
+
+        .section:hover .badges img {
+            transform: scale(1.1);
+            filter: brightness(1.2);
+        }
+
+        h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #0f0;
+            padding-bottom: 10px;
+        }
+
+        .text {
+            line-height: 1.6;
+        }
+
+        .badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .badges img {
+            border: 1px solid #0f0;
+            transition: transform 0.3s ease, filter 0.3s ease;
+        }
+
+        .links {
+            list-style: none;
+            padding: 0;
+        }
+
+        .links li {
+            margin-bottom: 10px;
+        }
+
+        .links a {
+            color: #0f0;
+            text-decoration: none;
+            transition: text-shadow 0.3s;
+        }
+
+        .links a:hover {
+            text-shadow: 0 0 10px #0f0;
+        }
+
+        #parallax-container {
+            perspective: 1000px;
+        }
+
+        .container {
+            transform-style: preserve-3d;
+            animation: float 10s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateZ(0) rotateX(0deg) rotateY(0deg); }
+            25% { transform: translateZ(20px) rotateX(2deg) rotateY(2deg); }
+            50% { transform: translateZ(0) rotateX(0deg) rotateY(0deg); }
+            75% { transform: translateZ(20px) rotateX(-2deg) rotateY(-2deg); }
+        }
+    </style>
+    <script>
+        class RainEffect {
+            constructor() {
+                this.canvas = document.createElement('canvas');
+                this.canvas.id = 'rain-canvas';
+                document.body.appendChild(this.canvas);
+                this.ctx = this.canvas.getContext('2d');
+                
+                this.resizeCanvas();
+                window.addEventListener('resize', () => this.resizeCanvas());
+
+                this.drops = [];
+                this.mouseX = window.innerWidth / 2;
+                this.mouseY = window.innerHeight / 2;
+                this.windX = 0;
+                this.windZ = 0;
+                this.targetWindX = 0;
+                this.targetWindZ = 0;
+                
+                window.addEventListener('mousemove', (e) => {
+                    // Calculate wind based on mouse position relative to center
+                    const centerX = window.innerWidth / 2;
+                    const centerY = window.innerHeight / 2;
+                    this.targetWindX = (e.clientX - centerX) / centerX * 5;
+                    this.targetWindZ = (e.clientY - centerY) / centerY * 2;
+                });
+
+                setTimeout(() => {
+                    this.canvas.style.opacity = '1';
+                    this.initializeDrops();
+                    this.animate();
+                }, 2000); // Start after 2 seconds
+            }
+
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.dropCount = Math.floor(this.canvas.width * this.canvas.height / 15000);
+            }
+
+            initializeDrops() {
+                for (let i = 0; i < this.dropCount; i++) {
+                    this.drops.push(this.createDrop());
+                }
+            }
+
+            createDrop() {
+                return {
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    z: Math.random() * 20,  // Depth for parallax effect
+                    l: Math.random() * 2 + 2,  // Length
+                    speed: Math.random() * 3 + 5
+                };
+            }
+
+            draw() {
+                // Smooth wind transition
+                this.windX += (this.targetWindX - this.windX) * 0.1;
+                this.windZ += (this.targetWindZ - this.windZ) * 0.1;
+
+                // Clear canvas with semi-transparent black for trail effect
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw drops
+                for (let i = 0; i < this.drops.length; i++) {
+                    const drop = this.drops[i];
+                    
+                    // Calculate drop properties based on depth
+                    const scale = (20 - drop.z) / 20;
+                    const dropLength = drop.l * scale * 15;
+                    const dropSpeed = drop.speed * scale;
+                    const windEffect = this.windX * scale;
+                    const depthEffect = this.windZ * (drop.z / 20);
+
+                    // Create gradient for the drop
+                    const gradient = this.ctx.createLinearGradient(
+                        drop.x, drop.y,
+                        drop.x + windEffect * 2, drop.y + dropLength
+                    );
+                    gradient.addColorStop(0, `rgba(0, 255, 0, ${0.1 + scale * 0.2})`);
+                    gradient.addColorStop(1, 'rgba(0, 255, 0, 0)');
+
+                    // Draw the drop
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(drop.x, drop.y);
+                    this.ctx.lineTo(drop.x + windEffect * 2, drop.y + dropLength);
+                    this.ctx.strokeStyle = gradient;
+                    this.ctx.lineWidth = scale * 1.5;
+                    this.ctx.stroke();
+
+                    // Update drop position
+                    drop.x += windEffect;
+                    drop.y += dropSpeed + depthEffect;
+                    
+                    // Reset drop if it goes off screen
+                    if (drop.y > this.canvas.height) {
+                        Object.assign(drop, this.createDrop());
+                        drop.y = -20;
+                    }
+                    if (drop.x > this.canvas.width) {
+                        drop.x = 0;
+                    } else if (drop.x < 0) {
+                        drop.x = this.canvas.width;
+                    }
+                }
+            }
+
+            animate() {
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // Initialize the rain effect when the page loads
+        window.addEventListener('load', () => {
+            new RainEffect();
+
+            // Add mouse follow effect for sections
+            const sections = document.querySelectorAll('.section');
+            const lerpFactor = 0.05; // Smoothing factor for movement
+            let mouseX = window.innerWidth / 2;
+            let mouseY = window.innerHeight / 2;
+            let targetMouseX = mouseX;
+            let targetMouseY = mouseY;
+
+            window.addEventListener('mousemove', (e) => {
+                targetMouseX = e.clientX;
+                targetMouseY = e.clientY;
+            });
+
+            function updateSectionTransforms() {
+                // Smooth mouse position
+                mouseX += (targetMouseX - mouseX) * lerpFactor;
+                mouseY += (targetMouseY - mouseY) * lerpFactor;
+
+                sections.forEach(section => {
+                    const rect = section.getBoundingClientRect();
+                    const sectionCenterX = rect.left + rect.width / 2;
+                    const sectionCenterY = rect.top + rect.height / 2;
+
+                    const deltaX = mouseX - sectionCenterX;
+                    const deltaY = mouseY - sectionCenterY;
+
+                    // Adjust sensitivity here - smaller divisor means more movement
+                    const moveX = deltaX / 60;
+                    const moveY = deltaY / 60;
+
+                    // Clamp movement to avoid excessive shifting
+                    const clampedX = Math.max(-5, Math.min(5, moveX));
+                    const clampedY = Math.max(-5, Math.min(5, moveY));
+
+                    section.style.setProperty('--mouse-x', `${clampedX}px`);
+                    section.style.setProperty('--mouse-y', `${clampedY}px`);
+                });
+
+                requestAnimationFrame(updateSectionTransforms);
+            }
+
+            updateSectionTransforms(); // Start the animation loop
+
+            // Try to ensure background audio plays
+            const audio = document.getElementById('background-audio');
+            if (audio) {
+                audio.play().catch(error => {
+                    console.log("Audio autoplay failed, likely due to browser policy. User interaction needed.", error);
+                    // Optionally, add a button or message here asking the user to click to enable sound
+                });
+            }
+        });
+    </script>
+</head>
+<body>
+    <audio id="background-audio" src="song.mp3" autoplay loop style="display: none;"></audio>
+
+    <div id="content">
+        <div id="parallax-container">
+            <div class="container">
+                <h1>hex</h1>
+
+                <div class="section">
+                    <h2>about</h2>
+                    <div class="text">
+                        security research / system optimization / code development / pentesting
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>links</h2>
+                    <ul class="links">
+                        <li><a href="https://www.exploit-db.com">exploit-db</a></li>
+                        <li><a href="https://www.hackthebox.eu">hackthebox</a></li>
+                        <li><a href="https://www.github.com">github</a></li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h2>contact</h2>
+                    <div class="text">
+                        matrix: [redacted]<br>
+                        irc: [connecting...]<br>
+                        signal: [encrypted]<br>
+                        youtube: <a href="https://youtube.com/@hexoffsets">@hexoffsets</a><br>
+                        discord: @hexoffsets<br>
+                        twitch: <a href="https://twitch.tv/hexoffsets">hexoffsets</a>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="badges">
+                        <img src="https://sumhex.ru/files/madewithnotepad2.gif" alt="Made with Notepad">
+                        <img src="https://cyber.dabamos.de/88x31/cd_rom.gif" alt="CD-ROM">
+                        <img src="https://cyber.dabamos.de/88x31/128.gif" alt="128">
+                        <img src="https://sumhex.ru/files/win95.gif" alt="Windows 95">
+                        <img src="https://sumhex.ru/files/macmade.gif" alt="Mac Made">
+                        <img src="https://cyber.dabamos.de/88x31/88_31freedownloads.gif" alt="Free Downloads">
+                        <img src="https://sumhex.ru/files/csplayer.gif" alt="CS Player">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
